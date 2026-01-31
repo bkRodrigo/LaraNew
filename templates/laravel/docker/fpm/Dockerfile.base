@@ -1,0 +1,11 @@
+FROM php:8.3-fpm
+
+ARG UID=1000
+ARG GID=1000
+
+# Create a non-root user matching the host UID/GID.
+RUN groupadd -g "${GID}" laravel \
+    && useradd -u "${UID}" -g laravel -m laravel
+
+WORKDIR /var/www/html
+USER laravel
