@@ -124,12 +124,13 @@ EOF
 
   # Write the README with the assembled sections.
   # Remove the default Laravel README first to ensure a full overwrite.
-  rm -f "${project_dir}/README.md"
-  cat <<EOF >"${project_dir}/README.md"
-# ${app_name}
+  local readme_path="${project_dir}/README.md"
+  rm -f "$readme_path"
 
-Minimal Laravel app with Docker (${services_desc}).
-
+  {
+    printf '# %s\n\n' "$app_name"
+    printf 'Minimal Laravel app with Docker (%s).\n\n' "$services_desc"
+    cat <<'EOF'
 ## Requirements
 - Docker
 - Docker Compose
@@ -146,16 +147,19 @@ Then generate the application key:
 docker compose exec fpm php artisan key:generate
 ```
 
-${quick_start_db}
-
+EOF
+    printf '%s\n\n' "$quick_start_db"
+    cat <<'EOF'
 ## Useful Aliases (bash/zsh)
-Add to your `~/.bashrc` or `~/.zshrc`:
+Add to your ~/.bashrc or ~/.zshrc:
 
 ```bash
 alias dc='docker compose'
 alias dc-exec='docker compose exec fpm'
 alias app='docker compose exec fpm php'
-${db_alias_line}
+EOF
+    printf '%s\n' "$db_alias_line"
+    cat <<'EOF'
 # Optional: alias weave='docker compose exec fpm php'
 ```
 
@@ -179,9 +183,19 @@ dc-exec composer update
 # Enter the PHP container
 dc-exec /bin/sh
 ```
-${db_section}${redis_section}${mail_section}
+EOF
+    printf '%s' "$db_section"
+    printf '%s' "$redis_section"
+    printf '%s' "$mail_section"
+    cat <<'EOF'
 
 ## Inspiration
 > "Make it work, make it right, make it fast." -- Kent Beck
 EOF
+  } > "$readme_path"
+
+  # Confirm the README was written successfully.
+  if [[ ! -f "$readme_path" ]]; then
+    return 1
+  fi
 }

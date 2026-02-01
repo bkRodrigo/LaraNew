@@ -270,7 +270,12 @@ echo "      ✓ DB/Redis/Mail settings applied"
 # Write a README tailored to the selected options.
 echo "[5/6] Writing README..."
 log_note "Write project README"
-write_project_readme "$PWD" "$APP_NAME" "$DB_KEY" "$CACHE_ENABLED" "$MAIL_ENABLED"
+if ! write_project_readme "$PWD" "$APP_NAME" "$DB_KEY" "$CACHE_ENABLED" "$MAIL_ENABLED"; then
+  echo "      ✗ README.md generation failed"
+  LOG_KEEP="true"
+  finalize_log
+  exit 1
+fi
 echo "      ✓ README.md generated"
 
 # Final confirmation and log cleanup.
