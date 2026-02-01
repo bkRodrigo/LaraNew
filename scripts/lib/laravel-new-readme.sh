@@ -41,6 +41,15 @@ write_project_readme() {
 
 ## Database (MySQL)
 Service name: `mysql`
+Default credentials:
+`DB_DATABASE=<app-name>`, `DB_USERNAME=<app-name>`, `DB_PASSWORD=secret`
+(`<app-name>` is lowercased and stripped to alphanumerics)
+
+If you change DB credentials after the first boot, recreate the volume:
+```bash
+dc down -v
+dc up -d
+```
 
 Example import:
 ```bash
@@ -54,6 +63,15 @@ EOF
 
 ## Database (PostgreSQL)
 Service name: `pgsql`
+Default credentials:
+`DB_DATABASE=<app-name>`, `DB_USERNAME=<app-name>`, `DB_PASSWORD=secret`
+(`<app-name>` is lowercased and stripped to alphanumerics)
+
+If you change DB credentials after the first boot, recreate the volume:
+```bash
+dc down -v
+dc up -d
+```
 
 Example import:
 ```bash

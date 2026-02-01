@@ -228,6 +228,18 @@ update_env_value() {
   fi
 }
 
+sanitize_db_name() {
+  local raw="$1"
+  local cleaned
+
+  cleaned="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]')"
+  if [[ -z "$cleaned" ]]; then
+    cleaned="app"
+  fi
+
+  printf '%s' "$cleaned"
+}
+
 # Copy minimal Docker files for nginx + php-fpm + chosen services.
 echo "[3/6] Writing Docker setup..."
 log_note "Copy minimal Docker files"
@@ -241,12 +253,19 @@ echo "      ✓ docker-compose.yml + docker/ files copied"
 echo "[4/6] Updating .env files..."
 log_note "Update environment files"
 if [[ "$DB_ENABLED" == "true" ]]; then
+  DB_DEFAULT_NAME="$(sanitize_db_name "$APP_NAME")"
   update_env_value ".env" "DB_CONNECTION" "$DB_CONNECTION"
   update_env_value ".env" "DB_HOST" "$DB_HOST"
   update_env_value ".env" "DB_PORT" "$DB_PORT"
+  update_env_value ".env" "DB_DATABASE" "$DB_DEFAULT_NAME"
+  update_env_value ".env" "DB_USERNAME" "$DB_DEFAULT_NAME"
+  update_env_value ".env" "DB_PASSWORD" "secret"
   update_env_value ".env.example" "DB_CONNECTION" "$DB_CONNECTION"
   update_env_value ".env.example" "DB_HOST" "$DB_HOST"
   update_env_value ".env.example" "DB_PORT" "$DB_PORT"
+  update_env_value ".env.example" "DB_DATABASE" "$DB_DEFAULT_NAME"
+  update_env_value ".env.example" "DB_USERNAME" "$DB_DEFAULT_NAME"
+  update_env_value ".env.example" "DB_PASSWORD" "secret"
 else
   update_env_value ".env" "DB_CONNECTION" "sqlite"
   update_env_value ".env" "DB_DATABASE" "database/database.sqlite"
