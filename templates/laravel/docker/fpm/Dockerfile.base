@@ -1,7 +1,43 @@
-FROM php:8.3-fpm
+FROM php:8.5-fpm
 
 ARG UID=1000
 ARG GID=1000
+
+# System deps + PHP extensions for Laravel, queues, Redis, and image processing.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        $PHPIZE_DEPS \
+        git unzip zip \
+        libicu-dev libzip-dev libxml2-dev libonig-dev \
+        libjpeg62-turbo-dev libpng-dev libwebp-dev libfreetype6-dev \
+        libcurl4-openssl-dev \
+        libsqlite3-dev \
+__DB_DEV_LIBS__
+    ; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
+    docker-php-ext-install -j$(nproc) \
+        bcmath \
+        pcntl \
+        intl \
+        mbstring \
+        zip \
+        xml \
+        curl \
+        gd \
+        exif \
+        opcache \
+        sockets \
+        pdo_sqlite \
+__DB_PDO_EXTS__
+    ; \
+    pecl install redis; \
+    docker-php-ext-enable redis; \
+    apt-get purge -y --auto-remove $PHPIZE_DEPS; \
+    rm -rf /var/lib/apt/lists/* /tmp/pear
+
+# Use production defaults.
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 # Create a non-root user matching the host UID/GID.
 RUN groupadd -g "${GID}" laravel \
@@ -9,3 +45,5 @@ RUN groupadd -g "${GID}" laravel \
 
 WORKDIR /var/www/html
 USER laravel
+
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
