@@ -17,6 +17,26 @@ write_project_readme() {
   local db_key="$3"
   local cache_enabled="$4"
   local mail_enabled="$5"
+  local db_default_name=""
+  local nvm_version=""
+  local nvm_section=""
+  if [[ -f "${project_dir}/.nvmrc" ]]; then
+    nvm_version="$(cat "${project_dir}/.nvmrc" 2>/dev/null || true)"
+  fi
+  if [[ -n "$nvm_version" ]]; then
+    nvm_section=$(cat <<EOF
+
+## Node (NVM)
+This project includes a \`.nvmrc\` pinned to Node ${nvm_version}. If you use
+NVM, run:
+
+\`\`\`bash
+nvm install
+nvm use
+\`\`\`
+EOF
+)
+  fi
 
   # Build a short services description line for the intro.
   local services_desc="nginx + php-fpm"
@@ -32,51 +52,97 @@ write_project_readme() {
     services_desc+=" + Mailpit"
   fi
 
+  db_default_name="$(printf '%s' "$app_name" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]')"
+  if [[ -z "$db_default_name" ]]; then
+    db_default_name="app"
+  fi
+
   # Select the DB alias line and DB section based on the chosen DB.
   local db_alias_line="# No DB service enabled (SQLite by default)."
   local db_section=""
   if [[ "$db_key" == "mysql" ]]; then
-    db_alias_line="alias dc-db='docker compose exec mysql'"
-    db_section=$(cat <<'EOF'
+    db_alias_line="alias dc-dbm='docker compose exec mysql'"
+    db_section=$(cat <<EOF
 
 ## Database (MySQL)
-Service name: `mysql`
+Service name: \`mysql\`
 Default credentials:
-`DB_DATABASE=<app-name>`, `DB_USERNAME=<app-name>`, `DB_PASSWORD=secret`
-(`<app-name>` is lowercased and stripped to alphanumerics)
+\`DB_DATABASE=${db_default_name}\`, \`DB_USERNAME=${db_default_name}\`, \`DB_PASSWORD=secret\`
+(derived from the app name: lowercased and stripped to alphanumerics)
 
 If you change DB credentials after the first boot, recreate the volume:
-```bash
+~~~bash
 dc down -v
 dc up -d
-```
+~~~
 
 Example import:
-```bash
-dc-db mysql -u root -p < /path/to/dump.sql
-```
+~~~bash
+dc-dbm mysql -u ${db_default_name} -p ${db_default_name} < /path/to/dump.sql
+~~~
+
+Interactive shell:
+~~~bash
+dc-dbm mysql -u ${db_default_name} -p ${db_default_name}
+~~~
+
+Useful commands (MySQL CLI):
+~~~sql
+SHOW DATABASES;
+USE ${db_default_name};
+SHOW TABLES;
+DESCRIBE users;
+SHOW INDEXES FROM users;
+SELECT COUNT(*) FROM users;
+SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
+~~~
 EOF
 )
   elif [[ "$db_key" == "pgsql" ]]; then
-    db_alias_line="alias dc-db='docker compose exec pgsql'"
-    db_section=$(cat <<'EOF'
+    db_alias_line="alias dc-dbp='docker compose exec pgsql'"
+    db_section=$(cat <<EOF
 
 ## Database (PostgreSQL)
-Service name: `pgsql`
+Service name: \`pgsql\`
 Default credentials:
-`DB_DATABASE=<app-name>`, `DB_USERNAME=<app-name>`, `DB_PASSWORD=secret`
-(`<app-name>` is lowercased and stripped to alphanumerics)
+\`DB_DATABASE=${db_default_name}\`, \`DB_USERNAME=${db_default_name}\`, \`DB_PASSWORD=secret\`
+(derived from the app name: lowercased and stripped to alphanumerics)
 
 If you change DB credentials after the first boot, recreate the volume:
-```bash
+~~~bash
 dc down -v
 dc up -d
-```
+~~~
 
 Example import:
-```bash
-dc-db psql -U postgres -d laravel < /path/to/dump.sql
-```
+~~~bash
+dc-dbp psql -U ${db_default_name} -d ${db_default_name} < /path/to/dump.sql
+~~~
+
+Interactive shell:
+~~~bash
+dc-dbp psql -U ${db_default_name} -d ${db_default_name}
+~~~
+
+Useful commands (psql):
+~~~psql
+\l           -- list databases
+\c ${db_default_name}   -- connect
+\dn          -- list schemas
+\dt          -- list tables
+\d users     -- describe table
+\d+ users    -- describe table (detailed)
+\di          -- list indexes
+\conninfo    -- connection info
+\q           -- quit
+~~~
+
+SQL examples (run after you connect to the database):
+~~~sql
+SELECT current_database();
+SELECT COUNT(*) FROM users;
+SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
+~~~
 EOF
 )
   else
@@ -131,10 +197,10 @@ EOF
 )
   else
     quick_start_db=$(cat <<'EOF'
-Then run migrations:
+Migrations run during setup. Re-run if needed (after setting the aliases below):
 
 ```bash
-docker compose exec fpm php artisan migrate
+app artisan migrate
 ```
 EOF
 )
@@ -154,15 +220,17 @@ EOF
 - Docker Compose
 
 ## Quick Start
+The project ships with a minimal `.env` created by the generator. Start
+services with:
+
 ```bash
-cp .env.example .env
 docker compose up -d
 ```
 
-Then generate the application key:
+If `APP_KEY` is empty, generate it (after setting the aliases below):
 
 ```bash
-docker compose exec fpm php artisan key:generate
+app artisan key:generate
 ```
 
 EOF
@@ -187,19 +255,43 @@ Reload your shell:
 source ~/.bashrc
 ```
 
+The commands below assume you have these aliases set.
+
+## Environment Files (Envy)
+This project ships with a minimal `.env`. To keep `.env.example` in sync with
+your config files, use Envy:
+
+```bash
+# Add missing env keys based on config/env() usage
+app artisan envy:sync
+
+# Remove unused env keys from .env.example
+app artisan envy:prune
+```
+
+If you regenerate `.env` from `.env.example`, make sure to preserve your
+existing `APP_KEY` (or re-run `app artisan key:generate`).
+
+EOF
+    printf '%s\n' "$nvm_section"
+    cat <<'EOF'
 ## Common Commands
 ```bash
 # Laravel commands
 app artisan migrate
 app artisan tinker
 app artisan test
+app artisan dev:dump-server
+app vendor/bin/phpunit
 
 # Composer (inside fpm container)
-dc-exec composer install
-dc-exec composer update
+app composer install
+app composer update
+app composer require vendor/package
+app composer require --dev vendor/package
 
 # Enter the PHP container
-dc-exec /bin/sh
+app /bin/sh
 ```
 
 ## Rebuild Images
