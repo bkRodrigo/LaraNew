@@ -76,6 +76,7 @@ The minimal Docker files live in:
 
 - `templates/laravel/compose/` (prebuilt docker-compose variants)
 - `templates/laravel/docker/nginx/default.conf`
-- `templates/laravel/docker/fpm/Dockerfile.base`
-- `templates/laravel/docker/fpm/Dockerfile.mysql`
-- `templates/laravel/docker/fpm/Dockerfile.pgsql`
+- `templates/laravel/docker/fpm/Dockerfile.base` (base template with placeholders)
+- `templates/laravel/docker/fpm/Dockerfile.mysql` (MySQL variant values)
+- `templates/laravel/docker/fpm/Dockerfile.pgsql` (PostgreSQL variant values)
+- `scripts/render-dockerfile.sh` (renders the final Dockerfile)

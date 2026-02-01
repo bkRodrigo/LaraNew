@@ -183,6 +183,13 @@ dc-exec composer update
 # Enter the PHP container
 dc-exec /bin/sh
 ```
+
+## Rebuild Images
+```bash
+# Rebuild the FPM image (pull latest base)
+dc build --pull --no-cache fpm
+dc up -d --force-recreate
+```
 EOF
     printf '%s' "$db_section"
     printf '%s' "$redis_section"

@@ -84,7 +84,9 @@ DB_LABEL="No database"
 DB_CONNECTION=""
 DB_HOST=""
 DB_PORT=""
-FPM_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.base"
+FPM_BASE_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.base"
+FPM_VARIANT_TEMPLATE=""
+RENDER_DOCKERFILE_SCRIPT="${SCRIPT_DIR}/render-dockerfile.sh"
 
 if [[ "$DB_ENABLED" == "true" ]]; then
   case "${DB_TYPE_RAW,,}" in
@@ -95,7 +97,7 @@ if [[ "$DB_ENABLED" == "true" ]]; then
       DB_CONNECTION="mysql"
       DB_HOST="mysql"
       DB_PORT="3306"
-      FPM_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.mysql"
+      FPM_VARIANT_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.mysql"
       ;;
     postgres|postgresql|pgsql)
       DB_KEY="pgsql"
@@ -104,7 +106,7 @@ if [[ "$DB_ENABLED" == "true" ]]; then
       DB_CONNECTION="pgsql"
       DB_HOST="pgsql"
       DB_PORT="5432"
-      FPM_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.pgsql"
+      FPM_VARIANT_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.pgsql"
       ;;
     *)
       echo "Error: DB must be MySQL or PostgreSQL." >&2
@@ -128,8 +130,12 @@ COMPOSE_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/compose/docker-compose.${DB
 NGINX_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/nginx/default.conf"
 
 # Ensure the template files exist before continuing.
-if [[ ! -f "$COMPOSE_TEMPLATE" || ! -f "$FPM_TEMPLATE" || ! -f "$NGINX_TEMPLATE" ]]; then
+if [[ ! -f "$COMPOSE_TEMPLATE" || ! -f "$FPM_BASE_TEMPLATE" || ! -f "$NGINX_TEMPLATE" || ! -f "$RENDER_DOCKERFILE_SCRIPT" ]]; then
   echo "Error: missing template files under templates/laravel." >&2
+  exit 1
+fi
+if [[ -n "$FPM_VARIANT_TEMPLATE" && ! -f "$FPM_VARIANT_TEMPLATE" ]]; then
+  echo "Error: missing Dockerfile variant template: $FPM_VARIANT_TEMPLATE" >&2
   exit 1
 fi
 
@@ -144,7 +150,12 @@ echo "  Database:       $DB_LABEL"
 echo "  Redis cache:    $(if [[ "$CACHE_ENABLED" == "true" ]]; then echo "enabled"; else echo "disabled"; fi)"
 echo "  Mailpit:        $(if [[ "$MAIL_ENABLED" == "true" ]]; then echo "enabled"; else echo "disabled"; fi)"
 echo "  Compose file:   $(basename "$COMPOSE_TEMPLATE")"
-echo "  FPM Dockerfile: $(basename "$FPM_TEMPLATE")"
+echo "  FPM template:   $(basename "$FPM_BASE_TEMPLATE")"
+if [[ -n "$FPM_VARIANT_TEMPLATE" ]]; then
+  echo "  FPM variant:    $(basename "$FPM_VARIANT_TEMPLATE")"
+else
+  echo "  FPM variant:    none"
+fi
 echo ""
 
 # Prevent overwriting existing files or directories.
@@ -222,7 +233,7 @@ echo "[3/6] Writing Docker setup..."
 log_note "Copy minimal Docker files"
 mkdir -p docker/nginx docker/fpm
 cp "$NGINX_TEMPLATE" docker/nginx/default.conf
-cp "$FPM_TEMPLATE" docker/fpm/Dockerfile
+"$RENDER_DOCKERFILE_SCRIPT" "$FPM_BASE_TEMPLATE" "$FPM_VARIANT_TEMPLATE" "docker/fpm/Dockerfile"
 cp "$COMPOSE_TEMPLATE" docker-compose.yml
 echo "      ✓ docker-compose.yml + docker/ files copied"
 
