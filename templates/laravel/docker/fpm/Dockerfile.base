@@ -26,13 +26,15 @@ __DB_DEV_LIBS__
         curl \
         gd \
         exif \
-        opcache \
         sockets \
         pdo_sqlite \
 __DB_PDO_EXTS__
     ; \
     pecl install redis; \
     docker-php-ext-enable redis; \
+    if [ -f "$(php -r 'echo ini_get(\"extension_dir\");')/opcache.so" ]; then \
+        docker-php-ext-enable opcache; \
+    fi; \
     apt-get purge -y --auto-remove $PHPIZE_DEPS; \
     rm -rf /var/lib/apt/lists/* /tmp/pear
 
