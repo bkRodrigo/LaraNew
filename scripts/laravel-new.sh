@@ -6,7 +6,7 @@
 # This script must be executable (e.g. `chmod +x scripts/laravel-new.sh`).
 #
 # Usage:
-#   laravel-new <AppName> [-d <MySQL|PostgreSQL>] [-c] [-m] [-n <version>]
+#   laravel-new <AppName> [-d <MySQL|PostgreSQL>] [-c] [-m] [-n <version>] [--db-host-port <port>]
 #
 # Parameters:
 #   AppName  Project directory name to create.
@@ -16,14 +16,34 @@
 #   -c, -cache, --cache        Include Redis.
 #   -m, -mail, --mail          Include Mailpit.
 #   -n, --node, --node-version Optional Node version to write into .nvmrc.
+#   --db-host-port <port>      Host port for the DB service (default: 3306/5432).
 #
 # Examples:
 #   laravel-new my-app
 #   laravel-new my-app -d PostgreSQL
+#   laravel-new my-app -d PostgreSQL --db-host-port 5433
 #   laravel-new my-app -d MySQL -c -m
+
+# This script changes shell options and working directories; sourcing it would leak
+# those changes into the user's interactive shell.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  echo "Error: run this script directly; do not source it." >&2
+  return 1 2>/dev/null || exit 1
+fi
 
 # Exit on errors, treat unset vars as errors, and fail pipelines if any command fails.
 set -euo pipefail
+
+restore_terminal() {
+  if [[ -t 0 ]]; then
+    stty sane >/dev/null 2>&1 || true
+  fi
+}
+
+trap restore_terminal EXIT
+trap 'restore_terminal; exit 130' INT
+trap 'restore_terminal; exit 129' HUP
+trap 'restore_terminal; exit 143' TERM
 
 # Resolve the directory this script lives in for template lookups.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,7 +93,7 @@ source "${SCRIPT_DIR}/lib/laravel-new-node.sh"
 # Print usage help for the script.
 usage() {
   cat <<'EOF'
-Usage: laravel-new <AppName> [-d <MySQL|PostgreSQL>] [-c] [-m] [-n <version>]
+Usage: laravel-new <AppName> [-d <MySQL|PostgreSQL>] [-c] [-m] [-n <version>] [--db-host-port <port>]
 
 Creates a new Laravel app via laravel.build (Docker-based) with the requested
 options, removes Sail, and writes a minimal Docker setup (nginx + fpm + optional
@@ -82,14 +102,88 @@ DB/Redis/Mailpit).
 Preflight checks:
   - Ensure the target project directory does not already exist.
   - Ensure Docker has at least DOCKER_MIN_FREE_GB (default 5GB) free in its data root.
-  - Ensure required host ports are available (80, DB port, Redis, Mailpit).
+  - Ensure required host ports are available (80, DB host port, Redis, Mailpit).
 
 Options:
   -d, -database, --database  Database engine: MySQL or PostgreSQL.
   -c, -cache, --cache        Include Redis.
   -m, -mail, --mail          Include Mailpit.
   -n, --node, --node-version Optional Node version to write into .nvmrc.
+  --db-host-port <port>      Host port for the DB service (default: 3306/5432).
 EOF
+}
+
+ensure_privilege_prompt_visible() {
+  local privilege_cmd=""
+
+  if command -v doas >/dev/null 2>&1; then
+    privilege_cmd="doas"
+  elif command -v sudo >/dev/null 2>&1; then
+    privilege_cmd="sudo"
+  else
+    echo "Error: laravel.build requires sudo or doas to adjust generated file ownership." >&2
+    return 1
+  fi
+
+  if "$privilege_cmd" -n true >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "The Laravel installer may need ${privilege_cmd} to fix generated file ownership."
+  echo "Please authenticate now so no password prompt is hidden in the install log."
+
+  if [[ "$privilege_cmd" == "sudo" ]]; then
+    "$privilege_cmd" -v
+  else
+    "$privilege_cmd" true
+  fi
+}
+
+sed_in_place() {
+  if sed --version >/dev/null 2>&1; then
+    sed -i "$@"
+  else
+    sed -i '' "$@"
+  fi
+}
+
+insert_after_first_match() {
+  local file="$1"
+  local pattern="$2"
+  local inserted_line="$3"
+  local tmp=""
+  local current_line=""
+  local inserted="false"
+
+  tmp="$(mktemp "${file}.tmp.XXXXXX")"
+  while IFS= read -r current_line || [[ -n "$current_line" ]]; do
+    printf '%s\n' "$current_line" >>"$tmp"
+    if [[ "$inserted" == "false" && "$current_line" =~ $pattern ]]; then
+      printf '%s\n' "$inserted_line" >>"$tmp"
+      inserted="true"
+    fi
+  done <"$file"
+
+  mv "$tmp" "$file"
+}
+
+insert_after_first_line() {
+  local file="$1"
+  local inserted_line="$2"
+  local tmp=""
+  local current_line=""
+  local line_number=0
+
+  tmp="$(mktemp "${file}.tmp.XXXXXX")"
+  while IFS= read -r current_line || [[ -n "$current_line" ]]; do
+    line_number=$((line_number + 1))
+    printf '%s\n' "$current_line" >>"$tmp"
+    if (( line_number == 1 )); then
+      printf '%s\n' "$inserted_line" >>"$tmp"
+    fi
+  done <"$file"
+
+  mv "$tmp" "$file"
 }
 
 # Parse the CLI arguments into well-named globals.
@@ -112,12 +206,17 @@ DB_LABEL="No database"
 DB_CONNECTION=""
 DB_HOST=""
 DB_PORT=""
+DB_HOST_PORT=""
+DB_HOST_PORT_OVERRIDDEN="false"
+DB_HOST_PORT_CANDIDATES=()
 FPM_BASE_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.base"
 FPM_VARIANT_TEMPLATE=""
 RENDER_DOCKERFILE_SCRIPT="${SCRIPT_DIR}/render-dockerfile.sh"
 
 if [[ "$DB_ENABLED" == "true" ]]; then
-  case "${DB_TYPE_RAW,,}" in
+  DB_TYPE_NORMALIZED="$(printf '%s' "$DB_TYPE_RAW" | tr '[:upper:]' '[:lower:]')"
+
+  case "$DB_TYPE_NORMALIZED" in
     mysql)
       DB_KEY="mysql"
       DB_LABEL="MySQL"
@@ -125,6 +224,8 @@ if [[ "$DB_ENABLED" == "true" ]]; then
       DB_CONNECTION="mysql"
       DB_HOST="mysql"
       DB_PORT="3306"
+      DB_HOST_PORT="$DB_PORT"
+      DB_HOST_PORT_CANDIDATES=(3307 3308 3309 13306 23306)
       FPM_VARIANT_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.mysql"
       ;;
     postgres|postgresql|pgsql)
@@ -134,6 +235,8 @@ if [[ "$DB_ENABLED" == "true" ]]; then
       DB_CONNECTION="pgsql"
       DB_HOST="pgsql"
       DB_PORT="5432"
+      DB_HOST_PORT="$DB_PORT"
+      DB_HOST_PORT_CANDIDATES=(5433 5434 5435 15432 25432)
       FPM_VARIANT_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.pgsql"
       ;;
     *)
@@ -203,6 +306,29 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "Error: docker is required." >&2
   exit 1
 fi
+if ! docker info >/dev/null 2>&1; then
+  echo "Error: Docker is not running." >&2
+  echo "      Start Docker Desktop, wait until it finishes starting, then run laravel-new again." >&2
+  exit 1
+fi
+if [[ "$DB_ENABLED" == "true" ]]; then
+  if ! resolve_db_host_port "$DB_LABEL" "$DB_PORT" "$DB_HOST_PORT_RAW" "${DB_HOST_PORT_CANDIDATES[@]}"; then
+    exit 1
+  fi
+fi
+REQUIRED_HOST_PORTS=(80)
+if [[ "$DB_ENABLED" == "true" ]]; then
+  REQUIRED_HOST_PORTS+=("$DB_HOST_PORT")
+fi
+if [[ "$CACHE_ENABLED" == "true" ]]; then
+  REQUIRED_HOST_PORTS+=(6379)
+fi
+if [[ "$MAIL_ENABLED" == "true" ]]; then
+  REQUIRED_HOST_PORTS+=(1025 8025)
+fi
+if ! check_ports_available "${REQUIRED_HOST_PORTS[@]}"; then
+  exit 1
+fi
 
 # Build the laravel.build URL (DB only; cache/mail are handled locally).
 LARAVEL_BUILD_URL="https://laravel.build/${APP_NAME}"
@@ -211,6 +337,9 @@ if [[ -n "$DB_WITH" ]]; then
 fi
 
 # Run the official Laravel build script with the requested options.
+if ! ensure_privilege_prompt_visible; then
+  exit 1
+fi
 echo "[1/10] Installing Laravel (laravel.build)..."
 if ! run_logged "Install Laravel" "curl -s \"$LARAVEL_BUILD_URL\" | bash"; then
   exit 1
@@ -230,7 +359,7 @@ echo "      ✓ Sail files removed"
 # If Sail is listed as a dev dependency, remove it using Composer in a container.
 if grep -q '"laravel/sail"' composer.json; then
   log_note "Remove laravel/sail dependency"
-  if ! run_logged "Remove laravel/sail" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 composer remove laravel/sail --dev"; then
+  if ! run_logged_retry "Remove laravel/sail" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 composer remove laravel/sail --dev" 2; then
     exit 1
   fi
   echo "      ✓ laravel/sail removed from composer.json"
@@ -242,7 +371,7 @@ fi
 # Install Envy for managing .env.example.
 echo "[3/10] Installing Envy..."
 log_note "Install worksome/envy"
-if ! run_logged "Install Envy" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 composer require worksome/envy --dev"; then
+if ! run_logged_retry "Install Envy" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 composer require worksome/envy --dev" 2; then
   exit 1
 fi
 if ! run_logged "Publish Envy config" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 php artisan envy:install"; then
@@ -250,7 +379,7 @@ if ! run_logged "Publish Envy config" "docker run --rm -u \"$(id -u):$(id -g)\" 
 fi
 log_note "Configure Envy helpers"
 if [[ -f "config/envy.php" ]]; then
-  sed -i \
+  sed_in_place \
     -e "s/'display_comments' => [a-z]*/'display_comments' => true/" \
     -e "s/'display_location_hints' => [a-z]*/'display_location_hints' => true/" \
     config/envy.php
@@ -261,7 +390,7 @@ echo "      ✓ worksome/envy installed"
 echo "[4/10] Installing VarDumper + dev:dump-server..."
 log_note "Install symfony/var-dumper"
 if ! grep -q '"symfony/var-dumper"' composer.json; then
-  if ! run_logged "Install symfony/var-dumper" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 composer require symfony/var-dumper --dev"; then
+  if ! run_logged_retry "Install symfony/var-dumper" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 composer require symfony/var-dumper --dev" 2; then
     exit 1
   fi
 fi
@@ -271,16 +400,16 @@ cp "$DUMP_SERVER_TEMPLATE" app/Console/Commands/DevDumpServerCommand.php
 if [[ -f "routes/console.php" ]]; then
   if ! grep -q "DevDumpServerCommand" routes/console.php; then
     if grep -q "^use Illuminate\\\\Support\\\\Facades\\\\Artisan;" routes/console.php; then
-      sed -i "/^use Illuminate\\\\Support\\\\Facades\\\\Artisan;/a\\\\use App\\\\Console\\\\Commands\\\\DevDumpServerCommand;" routes/console.php
+      insert_after_first_match routes/console.php '^use Illuminate\\Support\\Facades\\Artisan;$' 'use App\Console\Commands\DevDumpServerCommand;'
     else
-      sed -i "1a\\\\use App\\\\Console\\\\Commands\\\\DevDumpServerCommand;" routes/console.php
+      insert_after_first_line routes/console.php 'use App\Console\Commands\DevDumpServerCommand;'
     fi
   fi
   if ! grep -q "DevDumpServerCommand::class" routes/console.php; then
     if grep -q "DevDumpServerCommand;" routes/console.php; then
-      sed -i "/DevDumpServerCommand;/a\\\\Artisan::addCommands([DevDumpServerCommand::class]);" routes/console.php
+      insert_after_first_match routes/console.php 'DevDumpServerCommand;$' 'Artisan::addCommands([DevDumpServerCommand::class]);'
     else
-      sed -i "1a\\\\Artisan::addCommands([\\\\App\\\\Console\\\\Commands\\\\DevDumpServerCommand::class]);" routes/console.php
+      insert_after_first_line routes/console.php 'Artisan::addCommands([\App\Console\Commands\DevDumpServerCommand::class]);'
     fi
   fi
 fi
@@ -300,7 +429,7 @@ update_env_value() {
   safe_value="$(printf '%s' "$env_value" | sed -e 's/[&|]/\\&/g')"
 
   if grep -q "^${env_key}=" "$env_file"; then
-    sed -i "s|^${env_key}=.*|${env_key}=${safe_value}|" "$env_file"
+    sed_in_place "s|^${env_key}=.*|${env_key}=${safe_value}|" "$env_file"
   else
     echo "${env_key}=${env_value}" >> "$env_file"
   fi
@@ -391,12 +520,18 @@ if [[ "$DB_ENABLED" == "true" ]]; then
   update_env_value ".env" "DB_DATABASE" "$DB_DEFAULT_NAME"
   update_env_value ".env" "DB_USERNAME" "$DB_DEFAULT_NAME"
   update_env_value ".env" "DB_PASSWORD" "secret"
+  if [[ "$DB_HOST_PORT_OVERRIDDEN" == "true" ]]; then
+    update_env_value ".env" "FORWARD_DB_PORT" "$DB_HOST_PORT"
+  fi
   update_env_value ".env.example" "DB_CONNECTION" "$DB_CONNECTION"
   update_env_value ".env.example" "DB_HOST" "$DB_HOST"
   update_env_value ".env.example" "DB_PORT" "$DB_PORT"
   update_env_value ".env.example" "DB_DATABASE" "$DB_DEFAULT_NAME"
   update_env_value ".env.example" "DB_USERNAME" "$DB_DEFAULT_NAME"
   update_env_value ".env.example" "DB_PASSWORD" "secret"
+  if [[ "$DB_HOST_PORT_OVERRIDDEN" == "true" ]]; then
+    update_env_value ".env.example" "FORWARD_DB_PORT" "$DB_HOST_PORT"
+  fi
 else
   update_env_value ".env" "DB_CONNECTION" "sqlite"
   update_env_value ".env" "DB_DATABASE" "database/database.sqlite"
@@ -433,6 +568,10 @@ fi
 if ! run_logged "Prune .env.example with Envy" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 php artisan envy:prune --force"; then
   exit 1
 fi
+if [[ "$DB_HOST_PORT_OVERRIDDEN" == "true" ]]; then
+  ensure_blank_line ".env.example"
+  update_env_value ".env.example" "FORWARD_DB_PORT" "$DB_HOST_PORT"
+fi
 echo "      ✓ DB/Redis/Mail settings applied"
 
 # Start Docker and run migrations (idempotent).
@@ -442,12 +581,9 @@ if ! run_logged "Compose down" "docker compose down -v"; then
   exit 1
 fi
 log_note "Compose up"
-check_docker_disk_space
 HOST_PORTS=(80)
-if [[ "$DB_KEY" == "mysql" ]]; then
-  HOST_PORTS+=(3306)
-elif [[ "$DB_KEY" == "pgsql" ]]; then
-  HOST_PORTS+=(5432)
+if [[ "$DB_ENABLED" == "true" ]]; then
+  HOST_PORTS+=("$DB_HOST_PORT")
 fi
 if [[ "$CACHE_ENABLED" == "true" ]]; then
   HOST_PORTS+=(6379)
@@ -490,7 +626,7 @@ echo "      ✓ Migrations complete"
 # Write a README tailored to the selected options.
 echo "[9/10] Writing README..."
 log_note "Write project README"
-if ! write_project_readme "$PWD" "$APP_NAME" "$DB_KEY" "$CACHE_ENABLED" "$MAIL_ENABLED"; then
+if ! write_project_readme "$PWD" "$APP_NAME" "$DB_KEY" "$CACHE_ENABLED" "$MAIL_ENABLED" "$DB_HOST_PORT"; then
   echo "      ✗ README.md generation failed"
   LOG_KEEP="true"
   finalize_log

@@ -11,12 +11,14 @@
 #   $3  DB key: none | mysql | pgsql.
 #   $4  Cache enabled: true | false.
 #   $5  Mail enabled: true | false.
+#   $6  DB host port used from the host machine.
 write_project_readme() {
   local project_dir="$1"
   local app_name="$2"
   local db_key="$3"
   local cache_enabled="$4"
   local mail_enabled="$5"
+  local db_host_port="${6:-}"
   local db_default_name=""
   local nvm_version=""
   local nvm_section=""
@@ -56,6 +58,11 @@ EOF
   if [[ -z "$db_default_name" ]]; then
     db_default_name="app"
   fi
+  if [[ -z "$db_host_port" && "$db_key" == "mysql" ]]; then
+    db_host_port="3306"
+  elif [[ -z "$db_host_port" && "$db_key" == "pgsql" ]]; then
+    db_host_port="5432"
+  fi
 
   # Select the DB alias line and DB section based on the chosen DB.
   local db_alias_line="# No DB service enabled (SQLite by default)."
@@ -69,6 +76,9 @@ Service name: \`mysql\`
 Default credentials:
 \`DB_DATABASE=${db_default_name}\`, \`DB_USERNAME=${db_default_name}\`, \`DB_PASSWORD=secret\`
 (derived from the app name: lowercased and stripped to alphanumerics)
+
+Host connection port: \`localhost:${db_host_port}\`
+Container connection stays on \`mysql:3306\`.
 
 If you change DB credentials after the first boot, recreate the volume:
 ~~~bash
@@ -107,6 +117,9 @@ Service name: \`pgsql\`
 Default credentials:
 \`DB_DATABASE=${db_default_name}\`, \`DB_USERNAME=${db_default_name}\`, \`DB_PASSWORD=secret\`
 (derived from the app name: lowercased and stripped to alphanumerics)
+
+Host connection port: \`localhost:${db_host_port}\`
+Container connection stays on \`pgsql:5432\`.
 
 If you change DB credentials after the first boot, recreate the volume:
 ~~~bash

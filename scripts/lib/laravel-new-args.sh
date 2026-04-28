@@ -12,6 +12,7 @@
 #   CACHE_ENABLED  "true" if Redis cache was requested.
 #   MAIL_ENABLED   "true" if Mailpit was requested.
 #   NODE_VERSION_RAW Raw Node version value for .nvmrc (optional).
+#   DB_HOST_PORT_RAW Raw host port value for DB publishing (optional).
 #   SHOW_HELP      "true" if help was requested.
 #   PARSE_ERROR    Non-empty when a parsing error occurs.
 parse_args() {
@@ -22,6 +23,7 @@ parse_args() {
   CACHE_ENABLED="false"
   MAIL_ENABLED="false"
   NODE_VERSION_RAW=""
+  DB_HOST_PORT_RAW=""
   SHOW_HELP="false"
   PARSE_ERROR=""
 
@@ -62,6 +64,15 @@ parse_args() {
         NODE_VERSION_RAW="$2"
         shift 2
         ;;
+      --db-host-port)
+        # Optional host port for publishing the database service.
+        if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+          PARSE_ERROR="DB host port flag requires a port value."
+          return 1
+        fi
+        DB_HOST_PORT_RAW="$2"
+        shift 2
+        ;;
       -* )
         # Any other switch is considered unsupported.
         PARSE_ERROR="Unknown option: $1"
@@ -88,6 +99,11 @@ parse_args() {
   # Require an app name for non-help invocations.
   if [[ -z "$APP_NAME" ]]; then
     PARSE_ERROR="AppName is required."
+    return 1
+  fi
+
+  if [[ -n "$DB_HOST_PORT_RAW" && "$DB_ENABLED" != "true" ]]; then
+    PARSE_ERROR="--db-host-port requires a database (-d MySQL or -d PostgreSQL)."
     return 1
   fi
 }

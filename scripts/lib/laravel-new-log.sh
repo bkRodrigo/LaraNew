@@ -61,3 +61,46 @@ run_logged() {
     return 1
   fi
 }
+
+# Run a command with retries and capture all output to the log.
+# Useful for Composer operations on Docker Desktop bind mounts, where package
+# extraction can occasionally race filesystem visibility.
+#
+# Arguments:
+#   $1  Description for the log.
+#   $2  Command string to execute.
+#   $3  Attempt count (optional, default 2).
+run_logged_retry() {
+  local desc="$1"
+  local cmd="$2"
+  local attempts="${3:-2}"
+  local attempt=1
+
+  while (( attempt <= attempts )); do
+    if (( attempts > 1 )); then
+      log_note "${desc} (attempt ${attempt}/${attempts})"
+    else
+      log_note "$desc"
+    fi
+
+    if bash -c "$cmd" >>"$LOG_TMP" 2>&1; then
+      if (( attempt > 1 )); then
+        echo "      ✓ $desc succeeded on retry ${attempt}"
+      fi
+      return 0
+    fi
+
+    if (( attempt < attempts )); then
+      echo "      - $desc failed; retrying (${attempt}/${attempts})..."
+      sleep 2
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  echo "      ✗ $desc failed"
+  show_log_tail
+  LOG_KEEP="true"
+  finalize_log
+  return 1
+}
