@@ -37,7 +37,7 @@ source ~/.bashrc
 ## Usage
 
 ```bash
-laravel-new <AppName> [-d <MySQL|PostgreSQL>] [-c] [-m] [-n <version>]
+laravel-new <AppName> [-d <MySQL|PostgreSQL>] [-c] [-m] [-n <version>] [--db-host-port <port>]
 ```
 
 Parameters:
@@ -48,19 +48,22 @@ Options:
 - `-c`, `-cache`, `--cache`: Include Redis.
 - `-m`, `-mail`, `--mail`: Include Mailpit.
 - `-n`, `--node`, `--node-version`: Optional Node version to write into `.nvmrc`.
+- `--db-host-port`: Optional host port for the database service.
 
 ## Preflight Checks
 
 Before doing any work, the script verifies:
 - The target project directory does not already exist.
 - Docker has enough free disk space (default 5GB). Override with `DOCKER_MIN_FREE_GB`.
-- Required host ports are available (80, DB port, Redis, Mailpit).
+- Required host ports are available (80, DB host port, Redis, Mailpit).
+- If the default DB host port is busy, interactive runs can choose a free alternate port.
 
 Examples:
 
 ```bash
 laravel-new my-app
 laravel-new my-app -d PostgreSQL
+laravel-new my-app -d PostgreSQL --db-host-port 5433
 laravel-new my-app -d MySQL -c -m
 laravel-new my-app -n 22
 ```
