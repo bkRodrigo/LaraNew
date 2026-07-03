@@ -7,7 +7,7 @@ LaraNew has two kinds of dependencies:
 - Floating dependencies resolved when the generator runs, such as Laravel, Composer packages, and unpinned Docker tags.
 - Pinned template dependencies in this repository, mainly Docker image tags and generated config defaults.
 
-Prefer the latest stable or latest LTS release for stateful services unless the goal is explicitly to track newest-major behavior. Record any major-version tradeoffs in the PR notes.
+Prefer the latest LTS release when an upstream publishes an active LTS track; otherwise prefer the latest stable release. Record any major-version tradeoffs in the PR notes.
 
 ## 1. Prepare
 
@@ -185,7 +185,6 @@ MySQL tags are used only in the MySQL compose variants.
 ```bash
 grep -R "image: mysql:" templates/laravel/compose
 curl -fsSL https://endoflife.date/api/mysql.json | jq '.[0:6]'
-curl -fsSL https://registry.hub.docker.com/v2/repositories/library/mysql/tags/8.4 | jq '{name,last_updated,tag_status}'
 curl -fsSL https://registry.hub.docker.com/v2/repositories/library/mysql/tags/9.7 | jq '{name,last_updated,tag_status}'
 ```
 
@@ -197,7 +196,7 @@ Review links:
 
 Decision criteria:
 
-- Prefer MySQL LTS for default generated apps.
+- Prefer the latest MySQL LTS for default generated apps.
 - For major upgrades, review auth defaults, SQL mode changes, initialization env vars, and Laravel driver compatibility.
 - Because generated projects may have local Docker volumes, document that existing generated apps need a dump/restore path before changing major DB versions.
 - Recheck `templates/laravel/docker/fpm/Dockerfile.mysql` only if client library packages or PHP extension build requirements change.
@@ -464,7 +463,7 @@ Check common Docker tags:
 for tag in \
   library/php:8.5-fpm \
   library/nginx:1.30-alpine \
-  library/mysql:8.4 \
+  library/mysql:9.7 \
   library/postgres:18-alpine \
   library/redis:8-alpine \
   axllent/mailpit:latest; do

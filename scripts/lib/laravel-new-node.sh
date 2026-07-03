@@ -16,7 +16,7 @@ resolve_node_version() {
 
   if [[ -n "$cli_value" ]]; then
     if ! is_valid_node_version "$cli_value"; then
-      echo "Error: invalid Node version '$cli_value'. Use 22, 22.12, 22.12.0, lts/*, or lts/<name>." >&2
+      echo "Error: invalid Node version '$cli_value'. Use 24, 24.12, 24.12.0, lts/*, or lts/<name>." >&2
       return 1
     fi
     NODE_VERSION="$cli_value"
@@ -36,7 +36,7 @@ resolve_node_version() {
         return 0
       fi
 
-      echo "Invalid Node version. Use 22, 22.12, 22.12.0, lts/*, or lts/<name>." >&2
+      echo "Invalid Node version. Use 24, 24.12, 24.12.0, lts/*, or lts/<name>." >&2
     done
   fi
 }
@@ -44,9 +44,9 @@ resolve_node_version() {
 # Validate a Node version string for .nvmrc.
 #
 # Accepted formats:
-# - 22
-# - 22.12
-# - 22.12.0
+# - 24
+# - 24.12
+# - 24.12.0
 # - lts/*
 # - lts/<name>
 is_valid_node_version() {

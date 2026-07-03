@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:1.30-alpine
     ports:
       - "80:80"
     volumes:
@@ -20,7 +20,7 @@ services:
       - ./:/var/www/html:delegated
 
   mysql:
-    image: mysql:8.0
+    image: mysql:9.7
     restart: unless-stopped
     ports:
       - "${FORWARD_DB_PORT:-3306}:3306"
