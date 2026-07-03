@@ -45,22 +45,41 @@ Clone this repo and make the script executable:
 
 ```bash
 git clone <your-repo-url>
-cd brewkrafts
+cd LaraNew
 chmod +x scripts/laravel-new.sh
 ```
+
+You can run the script directly from the repository with
+`./scripts/laravel-new.sh`, or use one of the reusable shell setup options below.
 
 ## Add an alias
 
 Add this to your `~/.bashrc` (or `~/.bash_profile`):
 
 ```bash
-alias laravel-new='/path/to/brewkrafts/scripts/laravel-new.sh'
+alias laravel-new='/path/to/LaraNew/scripts/laravel-new.sh'
 ```
 
 Reload your shell:
 
 ```bash
 source ~/.bashrc
+```
+
+## Add a symlink on PATH
+
+Alternatively, create a symlink named `laravel-new` in a directory on your
+`PATH`:
+
+```bash
+mkdir -p ~/bin/executables
+ln -s /path/to/LaraNew/scripts/laravel-new.sh ~/bin/executables/laravel-new
+```
+
+If needed, add that directory to your shell startup file:
+
+```bash
+export PATH="$HOME/bin/executables:$PATH"
 ```
 
 ## Usage
