@@ -94,7 +94,7 @@ laravel-new my-app
 laravel-new my-app -d PostgreSQL
 laravel-new my-app -d PostgreSQL --db-host-port 5433
 laravel-new my-app -d MySQL -c -m
-laravel-new my-app -n 22
+laravel-new my-app -n 24
 ```
 
 ## Node (NVM)

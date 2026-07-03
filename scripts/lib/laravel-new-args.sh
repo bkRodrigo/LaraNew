@@ -58,7 +58,7 @@ parse_args() {
       -n|--node|--node-version)
         # Optional Node version for .nvmrc.
         if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
-          PARSE_ERROR="Node flag requires a version value (e.g. 22, 22.12.0, lts/*, lts/<name>)."
+          PARSE_ERROR="Node flag requires a version value (e.g. 24, 24.12.0, lts/*, lts/<name>)."
           return 1
         fi
         NODE_VERSION_RAW="$2"
