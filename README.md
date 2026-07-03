@@ -145,6 +145,9 @@ Docker Compose can build and start it. Template-output changes should be checked
 against the affected service combinations where practical: no database, MySQL,
 PostgreSQL, Redis, and Mailpit.
 
+For framework, Docker image, database, Redis, Mailpit, Node, or generated tooling
+upgrades, follow `docs/upgrade-laranew.md`.
+
 ## Debugging
 
 If the installer fails, a full log is saved to `.laravel-new.log` inside the
