@@ -103,8 +103,23 @@ Options:
 Before doing any work, the script verifies:
 - The target project directory does not already exist.
 - Docker has enough free disk space (default 5GB). Override with `DOCKER_MIN_FREE_GB`.
-- Required host ports are available (80, DB host port, Redis, Mailpit).
-- If the default DB host port is busy, interactive runs can choose a free alternate port.
+- Required host ports are available for HTTP, DB, Redis, and Mailpit.
+- If a default host port is busy, the script tries up to 50 reasonable alternatives before prompting.
+
+## Host Ports
+
+Generated projects keep container ports stable and publish host ports through
+`.env` `FORWARD_*` values. The generator writes the selected local host ports to
+`.env`, while `.env.example` documents the conventional defaults:
+
+- `FORWARD_HTTP_PORT=80`
+- `FORWARD_DB_PORT=3306` or `5432` when a database is enabled
+- `FORWARD_REDIS_PORT=6379` when Redis is enabled
+- `FORWARD_MAILPIT_SMTP_PORT=1025` when Mailpit is enabled
+- `FORWARD_MAILPIT_DASHBOARD_PORT=8025` when Mailpit is enabled
+
+You can change these in a generated project's `.env` without forcing the same
+local ports on other developers.
 
 Examples:
 
@@ -143,7 +158,7 @@ nvm use
 11. If a DB is selected, sets `DB_DATABASE` and `DB_USERNAME` to the sanitized app
     name (lowercase, alphanumeric only), and `DB_PASSWORD=secret`.
 12. Rewrites `.env` and `.env.example` to a minimal baseline (preserving `APP_KEY`)
-    and then applies DB/Redis/Mailpit settings.
+    and then applies DB/Redis/Mailpit settings plus host-port `FORWARD_*` values.
 13. Prunes `.env.example` using Envy (via the Composer container, no Compose needed).
 14. Checks available Docker disk space and errors if it's too low (override with `DOCKER_MIN_FREE_GB`).
 15. Runs `docker compose down -v` and `docker compose up -d --build` for a clean start.
