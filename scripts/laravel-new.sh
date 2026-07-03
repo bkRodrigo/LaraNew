@@ -69,6 +69,20 @@ if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-log.sh" ]]; then
 fi
 source "${SCRIPT_DIR}/lib/laravel-new-log.sh"
 
+# Load reusable interactive prompt helpers.
+if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-prompt.sh" ]]; then
+  echo "Error: missing scripts/lib/laravel-new-prompt.sh" >&2
+  exit 1
+fi
+source "${SCRIPT_DIR}/lib/laravel-new-prompt.sh"
+
+# Load interactive service selection helpers.
+if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-interactive.sh" ]]; then
+  echo "Error: missing scripts/lib/laravel-new-interactive.sh" >&2
+  exit 1
+fi
+source "${SCRIPT_DIR}/lib/laravel-new-interactive.sh"
+
 # Load README helpers for per-project documentation.
 if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-readme.sh" ]]; then
   echo "Error: missing scripts/lib/laravel-new-readme.sh" >&2
@@ -213,6 +227,10 @@ if [[ "$SHOW_HELP" == "true" ]]; then
   exit 0
 fi
 
+if ! prompt_for_optional_services; then
+  exit 1
+fi
+
 # Normalize the DB parameter into internal settings (only if DB was requested).
 DB_KEY="none"
 DB_WITH=""
@@ -304,6 +322,10 @@ if [[ -n "$FPM_VARIANT_TEMPLATE" ]]; then
   echo "  FPM variant:    $(basename "$FPM_VARIANT_TEMPLATE")"
 else
   echo "  FPM variant:    none"
+fi
+echo ""
+if ! confirm_selected_options; then
+  exit 1
 fi
 echo ""
 

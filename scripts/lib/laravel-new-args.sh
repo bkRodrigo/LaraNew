@@ -11,6 +11,9 @@
 #   DB_TYPE_RAW    Raw database value (e.g. MySQL, PostgreSQL).
 #   CACHE_ENABLED  "true" if Redis cache was requested.
 #   MAIL_ENABLED   "true" if Mailpit was requested.
+#   DB_OPTION_SET  "true" if the database option was provided.
+#   CACHE_OPTION_SET "true" if the cache option was provided.
+#   MAIL_OPTION_SET "true" if the mail option was provided.
 #   NODE_VERSION_RAW Raw Node version value for .nvmrc (optional).
 #   DB_HOST_PORT_RAW Raw host port value for DB publishing (optional).
 #   SHOW_HELP      "true" if help was requested.
@@ -22,6 +25,9 @@ parse_args() {
   DB_TYPE_RAW=""
   CACHE_ENABLED="false"
   MAIL_ENABLED="false"
+  DB_OPTION_SET="false"
+  CACHE_OPTION_SET="false"
+  MAIL_OPTION_SET="false"
   NODE_VERSION_RAW=""
   DB_HOST_PORT_RAW=""
   SHOW_HELP="false"
@@ -42,17 +48,23 @@ parse_args() {
           return 1
         fi
         DB_ENABLED="true"
+        # shellcheck disable=SC2034
+        DB_OPTION_SET="true"
         DB_TYPE_RAW="$2"
         shift 2
         ;;
       -c|-cache|--cache)
         # Cache flag enables Redis.
         CACHE_ENABLED="true"
+        # shellcheck disable=SC2034
+        CACHE_OPTION_SET="true"
         shift
         ;;
       -m|-mail|--mail)
         # Mail flag enables Mailpit.
         MAIL_ENABLED="true"
+        # shellcheck disable=SC2034
+        MAIL_OPTION_SET="true"
         shift
         ;;
       -n|--node|--node-version)

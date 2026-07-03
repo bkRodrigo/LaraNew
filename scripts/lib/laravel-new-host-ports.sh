@@ -123,7 +123,10 @@ resolve_host_port() {
 
   echo "${label} host port ${default_port} is already in use, and no free automatic candidate was found."
   while true; do
-    read -r -p "${label} host port (${env_var}): " selected_port
+    if ! prompt_input "${label} host port (${env_var})"; then
+      return 1
+    fi
+    selected_port="$PROMPT_RESULT"
 
     if ! _is_valid_host_port "$selected_port"; then
       echo "Enter a port number between 1 and 65535."

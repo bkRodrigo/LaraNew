@@ -25,7 +25,10 @@ resolve_node_version() {
 
   if [[ -t 0 ]]; then
     while true; do
-      read -r -p "Please provide your target Node version for .nvmrc (leave blank to skip): " NODE_VERSION
+      if ! prompt_input "Please provide your target Node version for .nvmrc (leave blank to skip)"; then
+        return 0
+      fi
+      NODE_VERSION="$PROMPT_RESULT"
       NODE_VERSION="$(printf '%s' "$NODE_VERSION" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
       if [[ -z "$NODE_VERSION" ]]; then
