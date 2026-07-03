@@ -10,6 +10,35 @@ so you can run the app without Sail.
 - Docker
 - curl
 
+On Windows, run the script from a WSL distro and make sure Docker is available
+there, for example through Docker Desktop with WSL integration enabled.
+
+For development or validation work, install ShellCheck so Bash scripts can be
+linted consistently on Linux, macOS, and Windows with WSL.
+
+Linux / WSL (Debian or Ubuntu):
+
+```bash
+sudo apt update
+sudo apt install shellcheck
+```
+
+macOS with Homebrew:
+
+```bash
+brew install shellcheck
+```
+
+Other Linux distributions:
+
+```bash
+# Fedora
+sudo dnf install ShellCheck
+
+# Arch
+sudo pacman -S shellcheck
+```
+
 ## Install
 
 Clone this repo and make the script executable:
@@ -101,6 +130,20 @@ nvm use
 15. Runs `docker compose down -v` and `docker compose up -d --build` for a clean start.
 16. Runs database migrations with retries.
 17. Writes a project README tailored to selected services.
+
+## Development Validation
+
+There is no build step for this repository. Before opening a PR, run:
+
+```bash
+bash -n scripts/*.sh scripts/lib/*.sh
+shellcheck scripts/*.sh scripts/lib/*.sh
+```
+
+For functional changes, generate a project in a disposable directory and confirm
+Docker Compose can build and start it. Template-output changes should be checked
+against the affected service combinations where practical: no database, MySQL,
+PostgreSQL, Redis, and Mailpit.
 
 ## Debugging
 
