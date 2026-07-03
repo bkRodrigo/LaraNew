@@ -98,9 +98,40 @@ Options:
 - `-n`, `--node`, `--node-version`: Optional Node version to write into `.nvmrc`.
 - `--db-host-port`: Optional host port for the database service.
 
-Interactive runs prompt for omitted optional services. Passing a flag skips the
-corresponding prompt; non-interactive runs keep defaults (`no database`, Redis
-disabled, Mailpit disabled).
+## Interactive Prompts
+
+Interactive runs ask for omitted optional services before generating the project.
+Passing a flag skips the corresponding prompt; non-interactive runs keep
+defaults (`no database`, Redis disabled, Mailpit disabled).
+
+For example, `laravel-new my-app` prompts for every optional service:
+
+```text
+Configure optional services:
+
+Database
+  1) None
+  2) MySQL
+  3) PostgreSQL
+Choose Database [1]:
+Enable Redis cache? [y/N]
+Enable Mailpit? [y/N]
+
+Selected options:
+  AppName:        my-app
+  Database:       No database
+  Redis cache:    disabled
+  Mailpit:        disabled
+  Compose file:   docker-compose.none.yml
+  FPM template:   Dockerfile.base
+  FPM variant:    none
+
+Continue? [Y/n]
+```
+
+Partial flags skip only the choices they specify. For example,
+`laravel-new my-app -d MySQL` skips the database prompt but still asks whether
+to enable Redis and Mailpit.
 
 ## Preflight Checks
 
