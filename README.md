@@ -98,6 +98,41 @@ Options:
 - `-n`, `--node`, `--node-version`: Optional Node version to write into `.nvmrc`.
 - `--db-host-port`: Optional host port for the database service.
 
+## Interactive Prompts
+
+Interactive runs ask for omitted optional services before generating the project.
+Passing a flag skips the corresponding prompt; non-interactive runs keep
+defaults (`no database`, Redis disabled, Mailpit disabled).
+
+For example, `laravel-new my-app` prompts for every optional service:
+
+```text
+Configure optional services:
+
+Database
+  1) None
+  2) MySQL
+  3) PostgreSQL
+Choose Database [1]:
+Enable Redis cache? [y/N]
+Enable Mailpit? [y/N]
+
+Selected options:
+  AppName:        my-app
+  Database:       No database
+  Redis cache:    disabled
+  Mailpit:        disabled
+  Compose file:   docker-compose.none.yml
+  FPM template:   Dockerfile.base
+  FPM variant:    none
+
+Continue? [Y/n]
+```
+
+Partial flags skip only the choices they specify. For example,
+`laravel-new my-app -d MySQL` skips the database prompt but still asks whether
+to enable Redis and Mailpit.
+
 ## Preflight Checks
 
 Before doing any work, the script verifies:
@@ -150,20 +185,21 @@ nvm use
 3. Removes the `laravel/sail` dependency using Composer inside a Docker container.
 4. Installs `worksome/envy` and publishes its config for `.env.example` hygiene.
 5. Installs `symfony/var-dumper` (dev) and wires up `dev:dump-server`.
-6. Selects the right compose template based on DB/cache/mail options.
-7. Renders `docker/fpm/Dockerfile` from the base template plus the DB variant.
-8. Copies in minimal Docker files from `templates/laravel/`.
-9. Optionally writes a `.nvmrc` when a Node version is provided (flag or prompt).
-10. If no DB is selected, sets SQLite defaults and creates `database/database.sqlite`.
-11. If a DB is selected, sets `DB_DATABASE` and `DB_USERNAME` to the sanitized app
+6. Prompts for omitted optional services during interactive runs.
+7. Selects the right compose template based on DB/cache/mail options.
+8. Renders `docker/fpm/Dockerfile` from the base template plus the DB variant.
+9. Copies in minimal Docker files from `templates/laravel/`.
+10. Optionally writes a `.nvmrc` when a Node version is provided (flag or prompt).
+11. If no DB is selected, sets SQLite defaults and creates `database/database.sqlite`.
+12. If a DB is selected, sets `DB_DATABASE` and `DB_USERNAME` to the sanitized app
     name (lowercase, alphanumeric only), and `DB_PASSWORD=secret`.
-12. Rewrites `.env` and `.env.example` to a minimal baseline (preserving `APP_KEY`)
+13. Rewrites `.env` and `.env.example` to a minimal baseline (preserving `APP_KEY`)
     and then applies DB/Redis/Mailpit settings plus host-port `FORWARD_*` values.
-13. Prunes `.env.example` using Envy (via the Composer container, no Compose needed).
-14. Checks available Docker disk space and errors if it's too low (override with `DOCKER_MIN_FREE_GB`).
-15. Runs `docker compose down -v` and `docker compose up -d --build` for a clean start.
-16. Runs database migrations with retries.
-17. Writes a project README tailored to selected services.
+14. Prunes `.env.example` using Envy (via the Composer container, no Compose needed).
+15. Checks available Docker disk space and errors if it's too low (override with `DOCKER_MIN_FREE_GB`).
+16. Runs `docker compose down -v` and `docker compose up -d --build` for a clean start.
+17. Runs database migrations with retries.
+18. Writes a project README tailored to selected services.
 
 ## Development Validation
 
