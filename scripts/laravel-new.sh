@@ -45,8 +45,15 @@ trap 'restore_terminal; exit 130' INT
 trap 'restore_terminal; exit 129' HUP
 trap 'restore_terminal; exit 143' TERM
 
-# Resolve the directory this script lives in for template lookups.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the real directory this script lives in for template lookups, including
+# when invoked through a symlink on PATH.
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  SOURCE_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="${SOURCE_DIR}/${SOURCE}"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
 # Load argument parsing helpers.
 if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-args.sh" ]]; then
