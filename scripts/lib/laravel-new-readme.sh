@@ -12,6 +12,10 @@
 #   $4  Cache enabled: true | false.
 #   $5  Mail enabled: true | false.
 #   $6  DB host port used from the host machine.
+#   $7  HTTP host port used from the host machine.
+#   $8  Redis host port used from the host machine.
+#   $9  Mailpit SMTP host port used from the host machine.
+#   $10 Mailpit dashboard host port used from the host machine.
 write_project_readme() {
   local project_dir="$1"
   local app_name="$2"
@@ -19,7 +23,14 @@ write_project_readme() {
   local cache_enabled="$4"
   local mail_enabled="$5"
   local db_host_port="${6:-}"
+  local http_host_port="${7:-80}"
+  local redis_host_port="${8:-6379}"
+  local mailpit_smtp_host_port="${9:-1025}"
+  local mailpit_dashboard_host_port="${10:-8025}"
   local db_default_name=""
+  local app_url="http://localhost"
+  local host_port_recreate_commands=""
+  local host_ports_section=""
   local nvm_version=""
   local nvm_section=""
   if [[ -f "${project_dir}/.nvmrc" ]]; then
@@ -62,6 +73,9 @@ EOF
     db_host_port="3306"
   elif [[ -z "$db_host_port" && "$db_key" == "pgsql" ]]; then
     db_host_port="5432"
+  fi
+  if [[ "$http_host_port" != "80" ]]; then
+    app_url="http://localhost:${http_host_port}"
   fi
 
   # Select the DB alias line and DB section based on the chosen DB.
@@ -170,14 +184,14 @@ EOF
   # Add a Redis section only when cache is enabled.
   local redis_section=""
   if [[ "$cache_enabled" == "true" ]]; then
-    redis_section=$(cat <<'EOF'
+    redis_section=$(cat <<EOF
 
 ## Redis
-Redis runs on:
+Redis is published on:
 
-```bash
-localhost:6379
-```
+\`localhost:${redis_host_port}\`
+
+Container connection stays on \`redis:6379\`.
 EOF
 )
   fi
@@ -185,17 +199,88 @@ EOF
   # Add a Mailpit section only when mail is enabled.
   local mail_section=""
   if [[ "$mail_enabled" == "true" ]]; then
-    mail_section=$(cat <<'EOF'
+    mail_section=$(cat <<EOF
 
 ## Mailpit
 Mailpit UI:
 
-```bash
-http://localhost:8025
-```
+\`http://localhost:${mailpit_dashboard_host_port}\`
+
+SMTP is published on \`localhost:${mailpit_smtp_host_port}\`.
+Container connection stays on \`mailpit:1025\`.
 EOF
 )
   fi
+
+  host_port_recreate_commands=$(cat <<'EOF'
+# HTTP host port
+docker compose up -d --force-recreate nginx
+EOF
+)
+  if [[ "$db_key" == "mysql" ]]; then
+    host_port_recreate_commands+=$(cat <<'EOF'
+
+
+# MySQL host port
+docker compose up -d --force-recreate mysql
+EOF
+)
+  elif [[ "$db_key" == "pgsql" ]]; then
+    host_port_recreate_commands+=$(cat <<'EOF'
+
+
+# PostgreSQL host port
+docker compose up -d --force-recreate pgsql
+EOF
+)
+  fi
+  if [[ "$cache_enabled" == "true" ]]; then
+    host_port_recreate_commands+=$(cat <<'EOF'
+
+
+# Redis host port
+docker compose up -d --force-recreate redis
+EOF
+)
+  fi
+  if [[ "$mail_enabled" == "true" ]]; then
+    host_port_recreate_commands+=$(cat <<'EOF'
+
+
+# Mailpit SMTP/UI host ports
+docker compose up -d --force-recreate mailpit
+EOF
+)
+  fi
+
+  host_ports_section=$(cat <<EOF
+## Changing Host Ports
+Host-published Docker ports are controlled by \`.env\` \`FORWARD_*\` values.
+After changing one, recreate the affected service so Docker Compose applies the
+new port mapping:
+
+\`\`\`bash
+${host_port_recreate_commands}
+\`\`\`
+
+Or recreate all services without rebuilding images:
+
+\`\`\`bash
+docker compose up -d --force-recreate
+\`\`\`
+
+You do not need \`--build\` unless Dockerfiles or image build inputs changed.
+Do not run \`docker compose down -v\` for a host-port change unless you
+intentionally want to delete volumes.
+
+If you change \`FORWARD_HTTP_PORT\`, update \`APP_URL\` to match:
+
+\`\`\`env
+FORWARD_HTTP_PORT=8080
+APP_URL=http://localhost:8080
+\`\`\`
+EOF
+)
 
   # Tailor the Quick Start section depending on whether a DB is enabled.
   local quick_start_db=""
@@ -227,6 +312,7 @@ EOF
   {
     printf '# %s\n\n' "$app_name"
     printf 'Minimal Laravel app with Docker (%s).\n\n' "$services_desc"
+    printf "Application URL: \`%s\`\n\n" "$app_url"
     cat <<'EOF'
 ## Requirements
 - Docker
@@ -274,6 +360,10 @@ The commands below assume you have these aliases set.
 This project ships with a minimal `.env`. To keep `.env.example` in sync with
 your config files, use Envy:
 
+Host-published Docker ports are controlled by `.env` `FORWARD_*` values. The
+generated `.env` contains the local ports selected on this machine, while
+`.env.example` documents the conventional defaults for other developers.
+
 ```bash
 # Add missing env keys based on config/env() usage
 app artisan envy:sync
@@ -286,7 +376,8 @@ If you regenerate `.env` from `.env.example`, make sure to preserve your
 existing `APP_KEY` (or re-run `app artisan key:generate`).
 
 EOF
-    printf '%s\n' "$nvm_section"
+    printf '%s' "$nvm_section"
+    printf '%s\n\n' "$host_ports_section"
     cat <<'EOF'
 ## Common Commands
 ```bash

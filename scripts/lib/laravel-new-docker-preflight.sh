@@ -90,118 +90,6 @@ _port_in_use() {
   return 1
 }
 
-is_valid_port() {
-  local port="$1"
-
-  if [[ ! "$port" =~ ^[0-9]+$ ]]; then
-    return 1
-  fi
-
-  if (( port < 1024 || port > 65535 )); then
-    return 1
-  fi
-}
-
-suggest_free_port() {
-  local port=""
-
-  for port in "$@"; do
-    if ! _port_in_use "$port"; then
-      printf '%s' "$port"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-resolve_db_host_port() {
-  local db_label="$1"
-  local default_port="$2"
-  local requested_port="$3"
-  shift 3
-  local suggested_port=""
-  local answer=""
-  local selected_port=""
-
-  DB_HOST_PORT="$default_port"
-  DB_HOST_PORT_OVERRIDDEN="false"
-
-  if [[ -n "$requested_port" ]]; then
-    if ! is_valid_port "$requested_port"; then
-      echo "Error: --db-host-port must be a number between 1024 and 65535." >&2
-      return 1
-    fi
-    if _port_in_use "$requested_port"; then
-      echo "Error: ${db_label} host port ${requested_port} is already in use." >&2
-      echo "      Choose a free port and rerun with --db-host-port <port>." >&2
-      return 1
-    fi
-
-    DB_HOST_PORT="$requested_port"
-    if [[ "$DB_HOST_PORT" != "$default_port" ]]; then
-      DB_HOST_PORT_OVERRIDDEN="true"
-    fi
-    return 0
-  fi
-
-  if ! _port_in_use "$default_port"; then
-    return 0
-  fi
-
-  if [[ ! -t 0 ]]; then
-    echo "Error: ${db_label} host port ${default_port} is already in use." >&2
-    echo "      Stop the conflicting service or rerun with --db-host-port <port>." >&2
-    return 1
-  fi
-
-  echo "${db_label} host port ${default_port} is already in use."
-  while true; do
-    read -r -p "Configure this project to use a different host port? [Y/n] " answer
-    case "$answer" in
-      ""|y|Y|yes|YES|Yes)
-        break
-        ;;
-      n|N|no|NO|No)
-        echo "Stopped because ${db_label} host port ${default_port} is already in use." >&2
-        echo "Stop the conflicting service or rerun with --db-host-port <port>." >&2
-        return 1
-        ;;
-      *)
-        echo "Please answer yes or no."
-        ;;
-    esac
-  done
-
-  suggested_port="$(suggest_free_port "$@" || true)"
-  while true; do
-    if [[ -n "$suggested_port" ]]; then
-      read -r -p "${db_label} host port [${suggested_port}]: " selected_port
-      selected_port="${selected_port:-$suggested_port}"
-    else
-      read -r -p "${db_label} host port: " selected_port
-    fi
-
-    if ! is_valid_port "$selected_port"; then
-      echo "Enter a port number between 1024 and 65535."
-      continue
-    fi
-
-    if _port_in_use "$selected_port"; then
-      echo "Port ${selected_port} is already in use. Choose another port."
-      suggested_port="$(suggest_free_port "$@" || true)"
-      continue
-    fi
-
-    DB_HOST_PORT="$selected_port"
-    if [[ "$DB_HOST_PORT" != "$default_port" ]]; then
-      DB_HOST_PORT_OVERRIDDEN="true"
-    fi
-    echo "Using ${db_label} host port ${DB_HOST_PORT}."
-    return 0
-  done
-}
-
 # Ensure required host ports are free.
 #
 # Arguments:
@@ -229,7 +117,7 @@ check_ports_available() {
 
   if (( ${#unavailable[@]} > 0 )); then
     echo "Error: required host ports already in use: ${unavailable[*]}" >&2
-    echo "      Stop the conflicting services or change ports in docker-compose." >&2
+    echo "      Stop the conflicting services or choose different FORWARD_* host ports." >&2
     return 1
   fi
 }

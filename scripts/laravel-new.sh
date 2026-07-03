@@ -90,6 +90,13 @@ if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-docker-preflight.sh" ]]; then
 fi
 source "${SCRIPT_DIR}/lib/laravel-new-docker-preflight.sh"
 
+# Load host port resolution helpers.
+if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-host-ports.sh" ]]; then
+  echo "Error: missing scripts/lib/laravel-new-host-ports.sh" >&2
+  exit 1
+fi
+source "${SCRIPT_DIR}/lib/laravel-new-host-ports.sh"
+
 # Load Node version helpers (optional .nvmrc).
 if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-node.sh" ]]; then
   echo "Error: missing scripts/lib/laravel-new-node.sh" >&2
@@ -109,7 +116,7 @@ DB/Redis/Mailpit).
 Preflight checks:
   - Ensure the target project directory does not already exist.
   - Ensure Docker has at least DOCKER_MIN_FREE_GB (default 5GB) free in its data root.
-  - Ensure required host ports are available (80, DB host port, Redis, Mailpit).
+  - Resolve available host ports for HTTP, DB, Redis, and Mailpit.
 
 Options:
   -d, -database, --database  Database engine: MySQL or PostgreSQL.
@@ -214,8 +221,11 @@ DB_CONNECTION=""
 DB_HOST=""
 DB_PORT=""
 DB_HOST_PORT=""
-DB_HOST_PORT_OVERRIDDEN="false"
-DB_HOST_PORT_CANDIDATES=()
+DB_HOST_PORT_CANDIDATE_START=""
+HTTP_HOST_PORT="80"
+REDIS_HOST_PORT="6379"
+MAILPIT_SMTP_HOST_PORT="1025"
+MAILPIT_DASHBOARD_HOST_PORT="8025"
 FPM_BASE_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.base"
 FPM_VARIANT_TEMPLATE=""
 RENDER_DOCKERFILE_SCRIPT="${SCRIPT_DIR}/render-dockerfile.sh"
@@ -232,7 +242,7 @@ if [[ "$DB_ENABLED" == "true" ]]; then
       DB_HOST="mysql"
       DB_PORT="3306"
       DB_HOST_PORT="$DB_PORT"
-      DB_HOST_PORT_CANDIDATES=(3307 3308 3309 13306 23306)
+      DB_HOST_PORT_CANDIDATE_START="3307"
       FPM_VARIANT_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.mysql"
       ;;
     postgres|postgresql|pgsql)
@@ -243,7 +253,7 @@ if [[ "$DB_ENABLED" == "true" ]]; then
       DB_HOST="pgsql"
       DB_PORT="5432"
       DB_HOST_PORT="$DB_PORT"
-      DB_HOST_PORT_CANDIDATES=(5433 5434 5435 15432 25432)
+      DB_HOST_PORT_CANDIDATE_START="5433"
       FPM_VARIANT_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/fpm/Dockerfile.pgsql"
       ;;
     *)
@@ -318,20 +328,44 @@ if ! docker info >/dev/null 2>&1; then
   echo "      Start Docker Desktop, wait until it finishes starting, then run laravel-new again." >&2
   exit 1
 fi
+reset_host_port_reservations
+if ! resolve_host_port "HTTP" "FORWARD_HTTP_PORT" "80" "8080"; then
+  exit 1
+fi
+HTTP_HOST_PORT="$RESOLVED_HOST_PORT"
+
 if [[ "$DB_ENABLED" == "true" ]]; then
-  if ! resolve_db_host_port "$DB_LABEL" "$DB_PORT" "$DB_HOST_PORT_RAW" "${DB_HOST_PORT_CANDIDATES[@]}"; then
+  if ! resolve_host_port "$DB_LABEL" "FORWARD_DB_PORT" "$DB_PORT" "$DB_HOST_PORT_CANDIDATE_START" "$DB_HOST_PORT_RAW"; then
     exit 1
   fi
+  DB_HOST_PORT="$RESOLVED_HOST_PORT"
 fi
-REQUIRED_HOST_PORTS=(80)
+if [[ "$CACHE_ENABLED" == "true" ]]; then
+  if ! resolve_host_port "Redis" "FORWARD_REDIS_PORT" "6379" "6380"; then
+    exit 1
+  fi
+  REDIS_HOST_PORT="$RESOLVED_HOST_PORT"
+fi
+if [[ "$MAIL_ENABLED" == "true" ]]; then
+  if ! resolve_host_port "Mailpit SMTP" "FORWARD_MAILPIT_SMTP_PORT" "1025" "1026"; then
+    exit 1
+  fi
+  MAILPIT_SMTP_HOST_PORT="$RESOLVED_HOST_PORT"
+  if ! resolve_host_port "Mailpit dashboard" "FORWARD_MAILPIT_DASHBOARD_PORT" "8025" "8026"; then
+    exit 1
+  fi
+  MAILPIT_DASHBOARD_HOST_PORT="$RESOLVED_HOST_PORT"
+fi
+
+REQUIRED_HOST_PORTS=("$HTTP_HOST_PORT")
 if [[ "$DB_ENABLED" == "true" ]]; then
   REQUIRED_HOST_PORTS+=("$DB_HOST_PORT")
 fi
 if [[ "$CACHE_ENABLED" == "true" ]]; then
-  REQUIRED_HOST_PORTS+=(6379)
+  REQUIRED_HOST_PORTS+=("$REDIS_HOST_PORT")
 fi
 if [[ "$MAIL_ENABLED" == "true" ]]; then
-  REQUIRED_HOST_PORTS+=(1025 8025)
+  REQUIRED_HOST_PORTS+=("$MAILPIT_SMTP_HOST_PORT" "$MAILPIT_DASHBOARD_HOST_PORT")
 fi
 if ! check_ports_available "${REQUIRED_HOST_PORTS[@]}"; then
   exit 1
@@ -486,6 +520,16 @@ sanitize_db_name() {
   printf '%s' "$cleaned"
 }
 
+format_localhost_url() {
+  local port="$1"
+
+  if [[ "$port" == "80" ]]; then
+    printf '%s' "http://localhost"
+  else
+    printf 'http://localhost:%s' "$port"
+  fi
+}
+
 # Copy minimal Docker files for nginx + php-fpm + chosen services.
 echo "[5/10] Writing Docker setup..."
 log_note "Copy minimal Docker files"
@@ -517,6 +561,10 @@ if [[ -f ".env" ]]; then
   APP_KEY_VALUE="$(grep -m1 '^APP_KEY=' .env | cut -d= -f2- || true)"
 fi
 write_minimal_env_files "$APP_NAME" "$APP_KEY_VALUE"
+APP_URL_VALUE="$(format_localhost_url "$HTTP_HOST_PORT")"
+update_env_value ".env" "APP_URL" "$APP_URL_VALUE"
+ensure_blank_line ".env"
+update_env_value ".env" "FORWARD_HTTP_PORT" "$HTTP_HOST_PORT"
 if [[ "$DB_ENABLED" == "true" ]]; then
   DB_DEFAULT_NAME="$(sanitize_db_name "$APP_NAME")"
   ensure_blank_line ".env"
@@ -527,18 +575,13 @@ if [[ "$DB_ENABLED" == "true" ]]; then
   update_env_value ".env" "DB_DATABASE" "$DB_DEFAULT_NAME"
   update_env_value ".env" "DB_USERNAME" "$DB_DEFAULT_NAME"
   update_env_value ".env" "DB_PASSWORD" "secret"
-  if [[ "$DB_HOST_PORT_OVERRIDDEN" == "true" ]]; then
-    update_env_value ".env" "FORWARD_DB_PORT" "$DB_HOST_PORT"
-  fi
+  update_env_value ".env" "FORWARD_DB_PORT" "$DB_HOST_PORT"
   update_env_value ".env.example" "DB_CONNECTION" "$DB_CONNECTION"
   update_env_value ".env.example" "DB_HOST" "$DB_HOST"
   update_env_value ".env.example" "DB_PORT" "$DB_PORT"
   update_env_value ".env.example" "DB_DATABASE" "$DB_DEFAULT_NAME"
   update_env_value ".env.example" "DB_USERNAME" "$DB_DEFAULT_NAME"
   update_env_value ".env.example" "DB_PASSWORD" "secret"
-  if [[ "$DB_HOST_PORT_OVERRIDDEN" == "true" ]]; then
-    update_env_value ".env.example" "FORWARD_DB_PORT" "$DB_HOST_PORT"
-  fi
 else
   update_env_value ".env" "DB_CONNECTION" "sqlite"
   update_env_value ".env" "DB_DATABASE" "database/database.sqlite"
@@ -554,6 +597,7 @@ if [[ "$CACHE_ENABLED" == "true" ]]; then
   update_env_value ".env" "CACHE_STORE" "redis"
   update_env_value ".env" "REDIS_HOST" "redis"
   update_env_value ".env" "REDIS_PORT" "6379"
+  update_env_value ".env" "FORWARD_REDIS_PORT" "$REDIS_HOST_PORT"
   update_env_value ".env.example" "CACHE_STORE" "redis"
   update_env_value ".env.example" "REDIS_HOST" "redis"
   update_env_value ".env.example" "REDIS_PORT" "6379"
@@ -567,6 +611,8 @@ if [[ "$MAIL_ENABLED" == "true" ]]; then
   update_env_value ".env" "MAIL_HOST" "mailpit"
   update_env_value ".env" "MAIL_PORT" "1025"
   update_env_value ".env" "MAIL_ENCRYPTION" "null"
+  update_env_value ".env" "FORWARD_MAILPIT_SMTP_PORT" "$MAILPIT_SMTP_HOST_PORT"
+  update_env_value ".env" "FORWARD_MAILPIT_DASHBOARD_PORT" "$MAILPIT_DASHBOARD_HOST_PORT"
   update_env_value ".env.example" "MAIL_MAILER" "smtp"
   update_env_value ".env.example" "MAIL_HOST" "mailpit"
   update_env_value ".env.example" "MAIL_PORT" "1025"
@@ -575,9 +621,17 @@ fi
 if ! run_logged "Prune .env.example with Envy" "docker run --rm -u \"$(id -u):$(id -g)\" -v \"$PWD\":/app -w /app composer:2 php artisan envy:prune --force"; then
   exit 1
 fi
-if [[ "$DB_HOST_PORT_OVERRIDDEN" == "true" ]]; then
-  ensure_blank_line ".env.example"
-  update_env_value ".env.example" "FORWARD_DB_PORT" "$DB_HOST_PORT"
+ensure_blank_line ".env.example"
+update_env_value ".env.example" "FORWARD_HTTP_PORT" "80"
+if [[ "$DB_ENABLED" == "true" ]]; then
+  update_env_value ".env.example" "FORWARD_DB_PORT" "$DB_PORT"
+fi
+if [[ "$CACHE_ENABLED" == "true" ]]; then
+  update_env_value ".env.example" "FORWARD_REDIS_PORT" "6379"
+fi
+if [[ "$MAIL_ENABLED" == "true" ]]; then
+  update_env_value ".env.example" "FORWARD_MAILPIT_SMTP_PORT" "1025"
+  update_env_value ".env.example" "FORWARD_MAILPIT_DASHBOARD_PORT" "8025"
 fi
 echo "      ✓ DB/Redis/Mail settings applied"
 
@@ -588,15 +642,15 @@ if ! run_logged "Compose down" "docker compose down -v"; then
   exit 1
 fi
 log_note "Compose up"
-HOST_PORTS=(80)
+HOST_PORTS=("$HTTP_HOST_PORT")
 if [[ "$DB_ENABLED" == "true" ]]; then
   HOST_PORTS+=("$DB_HOST_PORT")
 fi
 if [[ "$CACHE_ENABLED" == "true" ]]; then
-  HOST_PORTS+=(6379)
+  HOST_PORTS+=("$REDIS_HOST_PORT")
 fi
 if [[ "$MAIL_ENABLED" == "true" ]]; then
-  HOST_PORTS+=(1025 8025)
+  HOST_PORTS+=("$MAILPIT_SMTP_HOST_PORT" "$MAILPIT_DASHBOARD_HOST_PORT")
 fi
 if ! check_ports_available "${HOST_PORTS[@]}"; then
   cleanup_failed_setup "$PWD" "Required ports are in use"
@@ -633,7 +687,7 @@ echo "      ✓ Migrations complete"
 # Write a README tailored to the selected options.
 echo "[9/10] Writing README..."
 log_note "Write project README"
-if ! write_project_readme "$PWD" "$APP_NAME" "$DB_KEY" "$CACHE_ENABLED" "$MAIL_ENABLED" "$DB_HOST_PORT"; then
+if ! write_project_readme "$PWD" "$APP_NAME" "$DB_KEY" "$CACHE_ENABLED" "$MAIL_ENABLED" "$DB_HOST_PORT" "$HTTP_HOST_PORT" "$REDIS_HOST_PORT" "$MAILPIT_SMTP_HOST_PORT" "$MAILPIT_DASHBOARD_HOST_PORT"; then
   echo "      ✗ README.md generation failed"
   LOG_KEEP="true"
   finalize_log
