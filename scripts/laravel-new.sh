@@ -308,7 +308,7 @@ elif [[ "$MAIL_ENABLED" == "true" ]]; then
   COMPOSE_SUFFIX=".mail"
 fi
 
-COMPOSE_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/compose/docker-compose.${DB_KEY}${COMPOSE_SUFFIX}.yml"
+COMPOSE_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/compose/compose.${DB_KEY}${COMPOSE_SUFFIX}.yml"
 NGINX_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/docker/nginx/default.conf"
 DUMP_SERVER_TEMPLATE="${SCRIPT_DIR}/../templates/laravel/app/Console/Commands/DevDumpServerCommand.php"
 

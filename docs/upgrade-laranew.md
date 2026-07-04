@@ -51,8 +51,8 @@ Current upgrade surfaces to review:
 - PHP extensions and OS build dependencies in `templates/laravel/docker/fpm/Dockerfile.base`, `Dockerfile.mysql`, and `Dockerfile.pgsql`.
 - Composer CLI image uses in `scripts/laravel-new.sh` and `templates/laravel/docker/fpm/Dockerfile.base`.
 - Nginx image tags in `templates/laravel/compose/*.yml`.
-- MySQL image tags in `templates/laravel/compose/docker-compose.mysql*.yml`.
-- PostgreSQL image tags in `templates/laravel/compose/docker-compose.pgsql*.yml`.
+- MySQL image tags in `templates/laravel/compose/compose.mysql*.yml`.
+- PostgreSQL image tags in `templates/laravel/compose/compose.pgsql*.yml`.
 - Redis image tags in `templates/laravel/compose/*.cache*.yml`.
 - Mailpit image tags in `templates/laravel/compose/*.mail*.yml`.
 - Optional Node `.nvmrc` prompt and examples in `scripts/lib/laravel-new-node.sh` and `README.md`.

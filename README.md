@@ -123,7 +123,7 @@ Selected options:
   Redis cache:    disabled
   Mailpit:        disabled
   Compose output: compose.yml
-  Compose template: docker-compose.none.yml
+  Compose template: compose.none.yml
   FPM template:   Dockerfile.base
   FPM variant:    none
 
