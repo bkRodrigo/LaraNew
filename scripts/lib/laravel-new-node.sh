@@ -13,7 +13,6 @@
 resolve_node_version() {
   local cli_value="$1"
   local lts_major=""
-  local prompt_message=""
   NODE_VERSION=""
 
   if [[ -n "$cli_value" ]]; then
@@ -27,13 +26,13 @@ resolve_node_version() {
 
   if [[ -t 0 ]]; then
     if lts_major="$(latest_node_lts_major)"; then
-      prompt_message="Enter a Node version for .nvmrc (recommended: Node ${lts_major}, latest LTS major; press Enter to skip .nvmrc creation)"
+      print_node_version_prompt_options "$lts_major"
     else
-      prompt_message="Enter a Node version for .nvmrc (recommended: latest Node LTS major; examples: a major version, lts/*, or lts/<name>; press Enter to skip .nvmrc creation)"
+      print_node_version_prompt_options ""
     fi
 
     while true; do
-      if ! prompt_input "$prompt_message"; then
+      if ! prompt_input "Node version"; then
         return 0
       fi
       NODE_VERSION="$PROMPT_RESULT"
@@ -50,6 +49,24 @@ resolve_node_version() {
       echo "Invalid Node version. Use 24, 24.12, 24.12.0, lts/*, or lts/<name>." >&2
     done
   fi
+}
+
+# Print readable interactive choices for the optional .nvmrc version.
+print_node_version_prompt_options() {
+  local lts_major="$1"
+
+  echo "Choose a Node version for .nvmrc:"
+  if [[ -n "$lts_major" ]]; then
+    echo "- Type ${lts_major} to pin the current latest LTS major."
+  fi
+  echo "- Type lts/* to always use the latest LTS supported by nvm."
+  if [[ -n "$lts_major" ]]; then
+    echo "- Type a specific patch version like ${lts_major}.12.0."
+  else
+    echo "- Type a specific version like 24, 24.12, or 24.12.0."
+  fi
+  echo "- Press Enter to skip .nvmrc creation."
+  echo ""
 }
 
 # Best-effort lookup of the latest Node LTS major version.
