@@ -369,7 +369,7 @@ shellcheck scripts/*.sh scripts/lib/*.sh
 Validate Docker Compose templates parse. Run these from a disposable generated project or from temporary directories containing the rendered files and minimal placeholders.
 
 ```bash
-docker compose -f docker-compose.yml config
+docker compose -f compose.yml config
 ```
 
 ## 15. Functional Validation Matrix

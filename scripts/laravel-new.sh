@@ -332,7 +332,8 @@ echo "  AppName:        $APP_NAME"
 echo "  Database:       $DB_LABEL"
 echo "  Redis cache:    $(if [[ "$CACHE_ENABLED" == "true" ]]; then echo "enabled"; else echo "disabled"; fi)"
 echo "  Mailpit:        $(if [[ "$MAIL_ENABLED" == "true" ]]; then echo "enabled"; else echo "disabled"; fi)"
-echo "  Compose file:   $(basename "$COMPOSE_TEMPLATE")"
+echo "  Compose output: compose.yml"
+echo "  Compose template: $(basename "$COMPOSE_TEMPLATE")"
 echo "  FPM template:   $(basename "$FPM_BASE_TEMPLATE")"
 if [[ -n "$FPM_VARIANT_TEMPLATE" ]]; then
   echo "  FPM variant:    $(basename "$FPM_VARIANT_TEMPLATE")"
@@ -577,8 +578,8 @@ log_note "Copy minimal Docker files"
 mkdir -p docker/nginx docker/fpm
 cp "$NGINX_TEMPLATE" docker/nginx/default.conf
 "$RENDER_DOCKERFILE_SCRIPT" "$FPM_BASE_TEMPLATE" "$FPM_VARIANT_TEMPLATE" "docker/fpm/Dockerfile"
-cp "$COMPOSE_TEMPLATE" docker-compose.yml
-echo "      ✓ docker-compose.yml + docker/ files copied"
+cp "$COMPOSE_TEMPLATE" compose.yml
+echo "      ✓ compose.yml + docker/ files copied"
 
 # Optionally write NVM config for Node usage.
 echo "[6/10] Resolving Node version..."

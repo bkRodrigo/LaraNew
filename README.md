@@ -122,7 +122,8 @@ Selected options:
   Database:       No database
   Redis cache:    disabled
   Mailpit:        disabled
-  Compose file:   docker-compose.none.yml
+  Compose output: compose.yml
+  Compose template: docker-compose.none.yml
   FPM template:   Dockerfile.base
   FPM variant:    none
 
@@ -229,7 +230,7 @@ project directory. On success, the log file is deleted.
 
 The minimal Docker files live in:
 
-- `templates/laravel/compose/` (prebuilt docker-compose variants)
+- `templates/laravel/compose/` (prebuilt Compose variants copied to generated projects as `compose.yml`)
 - `templates/laravel/docker/nginx/default.conf`
 - `templates/laravel/docker/fpm/Dockerfile.base` (base template with placeholders)
 - `templates/laravel/docker/fpm/Dockerfile.mysql` (MySQL variant values)
