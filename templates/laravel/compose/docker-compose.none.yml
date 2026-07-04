@@ -16,5 +16,6 @@ services:
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
+        APT_INSTALL_FLAGS: ${APT_INSTALL_FLAGS:-}
     volumes:
       - ./:/var/www/html:delegated

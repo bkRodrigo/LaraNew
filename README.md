@@ -197,7 +197,9 @@ nvm use
     and then applies DB/Redis/Mailpit settings plus host-port `FORWARD_*` values.
 14. Prunes `.env.example` using Envy (via the Composer container, no Compose needed).
 15. Checks available Docker disk space and errors if it's too low (override with `DOCKER_MIN_FREE_GB`).
-16. Runs `docker compose down -v` and `docker compose up -d --build` for a clean start.
+16. Runs `docker compose down -v` and `docker compose up -d --build` for a clean start,
+    retrying likely transient apt/package mirror failures and optionally prompting for
+    a one-time `apt-get --fix-missing` recovery attempt.
 17. Runs database migrations with retries.
 18. Writes a project README tailored to selected services.
 
@@ -233,4 +235,5 @@ The minimal Docker files live in:
 - `templates/laravel/docker/fpm/Dockerfile.mysql` (MySQL variant values)
 - `templates/laravel/docker/fpm/Dockerfile.pgsql` (PostgreSQL variant values)
 - `scripts/render-dockerfile.sh` (renders the final Dockerfile)
+- `scripts/lib/laravel-new-compose-recovery.sh` (Compose build recovery helpers)
 - `scripts/lib/laravel-new-docker-preflight.sh` (Docker preflight checks)
