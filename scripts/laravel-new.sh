@@ -76,6 +76,14 @@ if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-prompt.sh" ]]; then
 fi
 source "${SCRIPT_DIR}/lib/laravel-new-prompt.sh"
 
+# Load Docker Compose recovery helpers.
+if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-compose-recovery.sh" ]]; then
+  echo "Error: missing scripts/lib/laravel-new-compose-recovery.sh" >&2
+  exit 1
+fi
+# shellcheck source=scripts/lib/laravel-new-compose-recovery.sh
+source "${SCRIPT_DIR}/lib/laravel-new-compose-recovery.sh"
+
 # Load interactive service selection helpers.
 if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-interactive.sh" ]]; then
   echo "Error: missing scripts/lib/laravel-new-interactive.sh" >&2
@@ -103,6 +111,14 @@ if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-docker-preflight.sh" ]]; then
   exit 1
 fi
 source "${SCRIPT_DIR}/lib/laravel-new-docker-preflight.sh"
+
+# Load scoped Docker Compose state checks.
+if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-docker-state.sh" ]]; then
+  echo "Error: missing scripts/lib/laravel-new-docker-state.sh" >&2
+  exit 1
+fi
+# shellcheck source=scripts/lib/laravel-new-docker-state.sh
+source "${SCRIPT_DIR}/lib/laravel-new-docker-state.sh"
 
 # Load host port resolution helpers.
 if [[ ! -f "${SCRIPT_DIR}/lib/laravel-new-host-ports.sh" ]]; then
@@ -348,6 +364,9 @@ fi
 if ! docker info >/dev/null 2>&1; then
   echo "Error: Docker is not running." >&2
   echo "      Start Docker Desktop, wait until it finishes starting, then run laravel-new again." >&2
+  exit 1
+fi
+if ! ensure_docker_compose_project_state_clean "$APP_NAME"; then
   exit 1
 fi
 reset_host_port_reservations
@@ -682,7 +701,7 @@ if ! check_docker_disk_space; then
   cleanup_failed_setup "$PWD" "Insufficient Docker disk space"
   exit 1
 fi
-if ! run_logged "Compose up" "docker compose up -d --build"; then
+if ! compose_up_with_recovery; then
   exit 1
 fi
 log_note "Run migrations"

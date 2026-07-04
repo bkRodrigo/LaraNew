@@ -2,11 +2,12 @@ FROM php:8.5-fpm
 
 ARG UID=1000
 ARG GID=1000
+ARG APT_INSTALL_FLAGS=
 
 # System deps + PHP extensions for Laravel, queues, Redis, and image processing.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends ${APT_INSTALL_FLAGS} \
         $PHPIZE_DEPS \
         git unzip zip \
         libicu-dev libzip-dev libxml2-dev libonig-dev \
