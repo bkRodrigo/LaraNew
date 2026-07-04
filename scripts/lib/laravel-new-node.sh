@@ -27,9 +27,9 @@ resolve_node_version() {
 
   if [[ -t 0 ]]; then
     if lts_major="$(latest_node_lts_major)"; then
-      prompt_message="Please provide your target Node version for .nvmrc (latest LTS major: ${lts_major}; blank skips .nvmrc creation)"
+      prompt_message="Enter a Node version for .nvmrc (recommended: Node ${lts_major}, latest LTS major; press Enter to skip .nvmrc creation)"
     else
-      prompt_message="Please provide your target Node version for .nvmrc (for example 24, lts/*, or lts/<name>; blank skips .nvmrc creation)"
+      prompt_message="Enter a Node version for .nvmrc (recommended: latest Node LTS major; examples: a major version, lts/*, or lts/<name>; press Enter to skip .nvmrc creation)"
     fi
 
     while true; do
@@ -54,25 +54,17 @@ resolve_node_version() {
 
 # Best-effort lookup of the latest Node LTS major version.
 latest_node_lts_major() {
-  local releases=""
-  local release=""
-  local major=""
+  local node_lib_dir=""
+  local lookup_script=""
 
-  if ! releases="$(curl -fsSL --connect-timeout 2 --max-time 5 https://nodejs.org/dist/index.json 2>/dev/null)"; then
+  node_lib_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  lookup_script="${node_lib_dir}/../latest-node-lts-major.sh"
+
+  if [[ ! -x "$lookup_script" ]]; then
     return 1
   fi
 
-  if ! release="$(printf '%s' "$releases" | tr '{' '\n' | grep -m1 '"lts"[[:space:]]*:[[:space:]]*"[^"]\+"')"; then
-    return 1
-  fi
-
-  major="$(printf '%s' "$release" | sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"v([0-9]+)(\.[0-9]+){0,2}".*/\1/p')"
-
-  if [[ ! "$major" =~ ^[0-9]+$ ]]; then
-    return 1
-  fi
-
-  printf '%s' "$major"
+  "$lookup_script"
 }
 
 # Validate a Node version string for .nvmrc.
