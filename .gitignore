@@ -3,3 +3,6 @@
 .env
 .laravel-new.log
 
+# opencode handoff artifacts
+# The handoff workflow writes temporary context/prompt files here for agent-to-agent transfer.
+temp/
